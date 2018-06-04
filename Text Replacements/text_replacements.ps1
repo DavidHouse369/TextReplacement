@@ -1,4 +1,4 @@
-<# : batch portion (begins PowerShell multiline comment block)
+﻿<# : Rename the file extension to .ps1 for purely powershell script, or .cmd for batch file starting
 @echo off & setlocal
 
 rem # re-launch self with PowerShell interpreter
@@ -12,7 +12,7 @@ goto :EOF
 $exitKeys = ,'32' # Space Bar
 $undo = '8' #Backspace
 
-# import GetAsyncKeyState()
+# import GetAsyncKeyState() and MapVirtualKey()
 $signatures = @'
     [DllImport("user32.dll")]
     public static extern short GetAsyncKeyState(int vKey);
@@ -25,7 +25,7 @@ $API = Add-Type -MemberDefinition $signatures -Name 'Win32' -Namespace API -Pass
 # import System.Windows.Forms
 Add-Type -AssemblyName System.Windows.Forms
 
-
+### Check if specific keys are currently pressed ###
 function __KeyPressCheck($iStart, $iFinish, $iHexKey = -1) {
 	$iVal = @()
 	if ($iHexKey -ne -1) {
@@ -40,19 +40,21 @@ function __KeyPressCheck($iStart, $iFinish, $iHexKey = -1) {
 	return $iVal
 }
 
+### Returns all keys currently pressed ###
 function anyKeyPressed() {
 	return __KeyPressCheck 8 221 -1
 }
 
+### Check if a specific key is currently pressed ###
 function keyPressed($key) {
     return __KeyPressCheck 1 1 $key
 }
 
+### Replace the key just typed with the respective replacement ###
 function replaceText($textKey, $textReplacement) {
-	$count = $textKey.length + 1
+	$count = $textKey.length + 2
 	[System.Windows.Forms.SendKeys]::SendWait("{BACKSPACE " + $count + "}")
 	start-sleep -milliseconds 10
-	# $textReplacement = $textReplacement.Replace("\n", "`n")
 	$prevClip = [System.Windows.Forms.Clipboard]::GetText()
 	start-sleep -milliseconds 10
 	[System.Windows.Forms.Clipboard]::SetText($textReplacement)
@@ -62,46 +64,52 @@ function replaceText($textKey, $textReplacement) {
 	[System.Windows.Forms.Clipboard]::SetText($prevClip)
 }
 
+### Load all keys and their replacements for use ##
 function loadReplacements($display) {
+    $global:textReplacements = Import-Clixml $filepath
+
+    # Calculate how much screen space the cmd window needs to take up
+	$lineCount = 15
+	$longestLineSize = 0
+
+    $customTabSize = 16
 	if ($display) {
 		Write-Host 'Text Replacements - Created by David House.'
 		Write-Host ''
 		Write-Host 'Current text replacements:'
+        $headerStr = "Key:" + (" " * ($customTabSize - 4)) + "Replacement:`n====" + (" " * ($customTabSize - 4)) + "============"
+        Write-Host $headerStr
 	}
-	$fileContents = Get-Content -Path $filepath
-	$lineCount = 9
-	$longestLineSize = 0
-	$global:textReplacements = @()
-	for ($i = 1; $i -lt $fileContents.Count; $i++) {
-		$lineCount++
-		$newTextReplacement = @()
-		$commaIndex = $fileContents[$i].IndexOf(',')
-		$newTextReplacement += $fileContents[$i].Substring(0, $commaIndex)
-		$newTextReplacement += $fileContents[$i].Substring($commaIndex + 1)
-		$newTextReplacement[1] = $newTextReplacement[1].Replace("\n", "`n")
-		$replacementToDisplay = $newTextReplacement[1].Replace("`n", "`n" + "              ")
-		$textToDisplay = 'Key:          ' + $newTextReplacement[0] + "`n" + 'Replacement:  ' + $replacementToDisplay
-		if ($display) { Write-Host $textToDisplay }
-		if ($i -lt $fileContents.Count - 1) {
-			if ($display) { Write-Host '' }
-			$lineCount++
-		}
-		$global:textReplacements += ,($newTextReplacement[0], -1, $newTextReplacement[1])
-		if ($newTextReplacement[1].Contains("`n")) {
-			$temp = $newTextReplacement[1].Split("`n")
-			foreach ($line in $temp.GetEnumerator()) {
-				$lineCount++
-				if ($line.length -gt $longestLineSize) {
-					$longestLineSize = $line.length
-				}
-			}
-		} else {
-			$lineCount++
-			if ($newTextReplacement[1].length -gt $longestLineSize) {
-				$longestLineSize = $newTextReplacement[1].length
-			}
-		}
-	}
+
+    foreach ($key in $global:textReplacements.Keys) {
+        $value = $global:textReplacements.Item($key)
+        $tabSize = $customTabSize - $key.length - 1
+        $displayStr = "/" + $key + (" " * $tabSize)
+        if ($value.Contains("`n")) {
+            $lines = $value.Split("`n")
+            $lineCount += $lines.length
+            foreach ($line in $lines) {
+                $displayStr += $line
+                if ($line -ne $lines[-1]) {
+                    $displayStr += "`n" + (" " * $customTabSize)
+                }
+                if ($line.length -gt $longestLineSize) {
+                    $longestLineSize = $line.length
+                }
+            }
+        } else {
+            $displayStr += $value
+            $lineCount++
+            if ($value.length -gt $longestLineSize) {
+                $longestLineSize = $value.length
+            }
+        }
+        if ($key -ne $global:textReplacements.Keys[-1]) {
+            $displayStr += "`n"
+            $lineCount++
+        }
+        Write-Host $displayStr
+    }
 	
 	if ($display) {
 		Write-Host ''
@@ -109,7 +117,7 @@ function loadReplacements($display) {
 		Write-Host 'Look for "TextReplacements.exe" in System Tray for Options'
 	}
 	
-	$longestLineSize += 14
+	$longestLineSize += $customTabSize
 	
 	# Minimum bounds 82x25
 	if ($longestLineSize -lt 82) { $longestLineSize = 82 }
@@ -122,11 +130,13 @@ function loadReplacements($display) {
 	return $newSize
 }
 
+### Returns the time the file was last modified ###
 function getCurrModifiedDate() {
 	$fileInfo = Get-Item $filepath
 	return $fileInfo.LastWriteTime
 }
 
+### Compares the time last modified to the value $start ###
 function hasFileBeenModified($start) {
     $end = getCurrModifiedDate
     $diff = New-TimeSpan -Start $start -End $end
@@ -137,6 +147,7 @@ function hasFileBeenModified($start) {
     }
 }
 
+### The file has been modified, load it again ###
 function reloadTextReplacements() {
 	$size = loadReplacements $false
 	$cols = $size[0]
@@ -154,24 +165,27 @@ function reloadTextReplacements() {
 	$size = loadReplacements $true
 }
 
+### Check to see if the buffer matches a key, and if so trigger the replacement ###
 function checkKeyBuffer($buffer) {
     $bufferComparable = -join $buffer | foreach {$_.ToLower()}
-    foreach ($replacement in $global:textReplacements) {
-        if ($bufferComparable -eq $replacement[0]) { # TODO: figure out a way to compare two arrays to ensure they are the same
-            replaceText $replacement[0] $replacement[2]
+    foreach ($key in $global:textReplacements.Keys) {
+        if ($bufferComparable -eq $key) {
+            replaceText $key $global:textReplacements.Item($key)
             break
         }
     }
 }
 
-$global:textReplacements = @()
 
-$filepath = ".\text_replacements.txt"
-$batchFilepath = ".\text_replacements_new_replacements.cmd"
+
+$global:textReplacements = @{}
+
+$filepath = ".\text_replacements.xml"
+$createReplacementsFilepath = ".\InputTester.ps1"
+#$createReplacementsFilepath = ".\text_replacements_new_replacements.ps1"
 if (-not (Test-Path $filepath)) {
-	start $batchFilepath -Wait
+	Invoke-Expression $createReplacementsFilepath
 }
-
 reloadTextReplacements
 
 $currModifiedDate = getCurrModifiedDate
@@ -191,42 +205,49 @@ Start-Sleep -Milliseconds 10
 
 while ($continue) {
 	if ($stopwatch.ElapsedMilliseconds -ge $targetTime) {
+        # Check every 5 seconds to see if the file has been modified
 		if (hasFileBeenModified $currModifiedDate) {
-			Write-Host ''
-			Write-Host 'Text Replacements have been modified; reloading Text Replacments...'
+			Write-Host "
+Text Replacements have been modified; reloading Text Replacments..."
 			start-sleep -milliseconds 1000
 			$currModifiedDate = getCurrModifiedDate
 			reloadTextReplacements
 		}
 		$stopwatch.Restart()
 	}
-
-    $changeOccurred = $false
+    
+    # Get currently pressed keys
     $newKeysDown = anyKeyPressed
     if ($newKeysDown.length -gt 0) {
         foreach ($newkeyDown in $newKeysDown) {
             if (-not ($keysDown.Contains($newkeyDown))) {
+                # Ignore any pressed keys that haven't been released since being processed
                 $keysDown += $newkeyDown
                 if ($newkeyDown -eq $undo) {
+                    # If backspace is pressed, remove the last key from the buffer
                     if ($keyBuffer.length -gt 1) { $keyBuffer = $keyBuffer[0..($keyBuffer.length - 2)] }
                     else { $keyBuffer = @() }
                 } elseif ($exitKeys.contains($newkeyDown)) {
-                    checkKeyBuffer $keyBuffer
+                    # If space is pressed, check if a key has been entered
+                    checkKeyBuffer $keyBuffer[1..($keyBuffer.length - 1)]
                     $keyBuffer = @()
                 } elseif (([int]$newKeyDown -ge 33) -and ([int]$newkeyDown -le 126)) {
                     if ([char][int]$newKeyDown -eq '/') {
+                        # If '/' is pressed, start the buffer reading
                         $keybuffer = @()
                         $keyBuffer += [char][int]$newKeyDown
-                        $changeOccurred = $true
                     } elseif ($keyBuffer.Length -gt 0) {
+                        # Add each key to the buffer
                         $keyBuffer += [char][int]$newKeyDown
-                        $changeOccurred = $true
                     }
                 }
             }
         }
+
+        # Loop through currently pressed keys and check if they have been released
         for ($i = $keysDown.length - 1; $i -ge 0; $i--) {
             if (-not ($newKeysDown.Contains($keysDown[$i]))) {
+                # If the key has been released, remove it from current processing array
                 if ($i -eq 0) {
                     # remove first item
                     $keysDown = $keysDown[1..($keysDown.length - 1)]
@@ -237,23 +258,16 @@ while ($continue) {
                     # remove last item
                     $keysDown = $keysDown[0..($keysDown.length - 2)]
                 }
-                $changeOccurred = $true
             }
         }
-        
-        if ($changeOccurred) {
-            #Write-Host 'Change' $keysDown -NoNewline -Separator ','
-            #Write-Host ''
-        }
     } else {
+        # There are currently no keys pressed
         if ($keysDown.length -gt 0) {
             $keysDown = @()
-            #Write-Host 'Empty'
         }
     }
-    #Write-Host 'Outside' $keysDown -NoNewline -Separator ','
-    #Write-Host ''
-    #Write-Host $keyBuffer
+
+    # Sleep to avoid locking up the system
 	start-sleep -milliseconds 10
 }
 
