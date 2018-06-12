@@ -81,7 +81,9 @@ function loadReplacements($display) {
         Write-Host $headerStr
 	}
 
-    foreach ($key in $global:textReplacements.Keys) {
+    $keys = $global:textReplacements.Keys | sort
+
+    foreach ($key in $keys) {
         $value = $global:textReplacements.Item($key)
         $tabSize = $customTabSize - $key.length - 1
         $displayStr = "/" + $key + (" " * $tabSize)
