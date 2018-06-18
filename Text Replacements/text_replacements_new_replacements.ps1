@@ -10,9 +10,12 @@ if (Test-Path $filepath) {
 $continue = $true
 
 Write-Host 'Text Replacements - Created by David House.'
+Write-Host "
+Valid characters for use in keys:"
 Write-Host $validKeyCharacters -NoNewline -Separator ','
 Write-Host "
-NOTE: All keys begin with '/'
+
+NOTE: Enter a key with an empty replacement to remove that key.
 "
 
 
@@ -26,6 +29,7 @@ While ($continue) {
         }
     }
     While (-not ($newKeyValid)) {
+        Write-Host "Invalid key. Ensure only characters listed above are used in keys."
         Write-Host -NoNewline "Enter a key to use: /"
         $key = Read-Host
         $newKeyValid = $true
@@ -46,7 +50,12 @@ While ($continue) {
 	    $newText += $input
 	    $input = Read-Host
     }
-    $xmlContent.Item($key) = $newText
+
+    if ($newText -eq "") {
+        $xmlContent.Remove($key)
+    } else {
+        $xmlContent.Item($key) = $newText
+    }
 
     if ((Read-Host "Would you like to create another replacement? [y/n]").ToLower() -ne "y") {
         $continue = $false
