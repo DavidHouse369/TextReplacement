@@ -54,14 +54,18 @@ function keyPressed($key) {
 function replaceText($textKey, $textReplacement) {
 	$count = $textKey.length + 2
 	[System.Windows.Forms.SendKeys]::SendWait("{BACKSPACE " + $count + "}")
-	start-sleep -milliseconds 10
 	$prevClip = [System.Windows.Forms.Clipboard]::GetText()
-	start-sleep -milliseconds 10
+    Start-Sleep -Milliseconds 10
 	[System.Windows.Forms.Clipboard]::SetText($textReplacement)
-	start-sleep -milliseconds 50
+    Start-Sleep -Milliseconds 10
 	[System.Windows.Forms.SendKeys]::SendWait("^v")
-	start-sleep -milliseconds 50
-	[System.Windows.Forms.Clipboard]::SetText($prevClip)
+    Start-Sleep -Milliseconds 50
+    if (($prevClip -ne $null) -and ($prevClip -ne "")) {
+        [System.Windows.Forms.Clipboard]::SetText($prevClip)
+    } else {
+        [System.Windows.Forms.Clipboard]::SetText("")
+    }
+	
 }
 
 ### Load all keys and their replacements for use ##

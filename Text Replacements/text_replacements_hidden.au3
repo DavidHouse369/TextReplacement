@@ -1,10 +1,20 @@
 #NoTrayIcon
+#include <Misc.au3>
 #include <AutoItConstants.au3>
 #include <MsgBoxConstants.au3>
 ;~ #include <StringConstants.au3>
 #include <TrayConstants.au3> ; Required for the $TRAY_ICONSTATE_SHOW constant.
 
+If _Singleton("TextReplacements", 1) == 0 Then
+   MsgBox(64, "Warning", "Only once instance of TextReplacements can be running at once." & @CRLF & "(This window will close automatically after two seconds)", 2)
+   Exit
+EndIf
+
+; Default tray menu items will not be shown and no tick marks.
 Opt("TrayMenuMode", 3)
+
+; Set Title Match Mode to match exactly
+Opt("WinTitleMatchMode", 3)
 
 Local $idShow = TrayCreateItem("Show")
 Local $idHide = TrayCreateItem("Hide")
