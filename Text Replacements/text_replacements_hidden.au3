@@ -1,8 +1,8 @@
 #NoTrayIcon
 #include <Misc.au3>
+#include <WinAPIGdi.au3>
 #include <AutoItConstants.au3>
 #include <MsgBoxConstants.au3>
-;~ #include <StringConstants.au3>
 #include <TrayConstants.au3> ; Required for the $TRAY_ICONSTATE_SHOW constant.
 
 If _Singleton("TextReplacements", 1) == 0 Then
@@ -16,21 +16,34 @@ Opt("TrayMenuMode", 3)
 ; Set Title Match Mode to match exactly
 Opt("WinTitleMatchMode", 3)
 
+$aData = _WinAPI_GetMonitorInfo(1)
+
 Local $idShow = TrayCreateItem("Show")
 Local $idHide = TrayCreateItem("Hide")
 Local $idAddTextReplacements = TrayCreateItem("Add Text Replacements")
 Local $idExit = TrayCreateItem("Exit")
 TraySetState($TRAY_ICONSTATE_SHOW)
+TraySetToolTip("Text Replacements")
 
 $sFilePath = @ScriptDir & "\text_replacements.xml"
 $bFileExists = FileExists($sFilePath)
 
+$sScriptPowerShellPath = '\text_replacements.ps1'
+$sScriptCMDPath = @ScriptDir & '\text_replacements.cmd'
+$sAddScriptPowerShellPath = '".\text_replacements_new_replacements.ps1"'
+$sAddScriptCMDPath = @ScriptDir & '\text_replacements_new_replacements.cmd'
+
+$bUsePowerShell = FileExists(@ScriptDir & $sScriptPowerShellPath)
+If $bUsePowerShell Then
+   $sScriptPowerShellPath = '".' & $sScriptPowerShellPath & '"'
+EndIf
+
 Local $ihWnd
 If Not $bFileExists Then
    AddNewTextReplacements(True)
-Else
-   RunMainScript(True)
 EndIf
+
+RunMainScript(True)
 
 While 1
    If Not WinExists($ihWnd) Then
@@ -49,7 +62,6 @@ While 1
 	  Case $idShow
 		 ShowScript(False)
 	  Case $idAddTextReplacements
-;~ 		 ExitScript(False)
 		 ShowScript(False)
 		 AddNewTextReplacements(False)
 	  Case $idExit
@@ -69,7 +81,11 @@ Func ShowMsg($type)
 EndFunc
 
 Func RunMainScript($showMsg)
-   Run('powershell.exe ".\text_replacements.ps1"', @ScriptDir, @SW_MINIMIZE)
+   If $bUsePowerShell Then
+	  Run('powershell.exe ' & $sScriptPowerShellPath, @ScriptDir, @SW_MINIMIZE)
+   Else
+	  Run($sScriptCMDPath, @ScriptDir, @SW_MINIMIZE)
+   EndIf
 
    WinWait("Windows PowerShell")
    $ihWnd = WinGetHandle("Windows PowerShell")
@@ -79,9 +95,11 @@ EndFunc
 
 Func AddNewTextReplacements($showMsg)
    If $showMsg Then ShowMsg("Adding")
-   RunWait('powershell.exe ".\text_replacements_new_replacements.ps1"')
-;~    RunWait("text_replacements_new_replacements.ps1")
-;~    RunMainScript($showMsg)
+   If $bUsePowerShell Then
+	  RunWait('powershell.exe ' & $sAddScriptPowerShellPath)
+   Else
+	  RunWait($sAddScriptCMDPath)
+   EndIf
 EndFunc
 
 Func HideScript($showMsg)
@@ -95,7 +113,7 @@ EndFunc
 Func ShowScript($showMsg)
    WinSetState($ihWnd, "", @SW_SHOW)
    WinSetState($ihWnd, "", @SW_RESTORE)
-   WinMove($ihWnd, "", 0, 0)
+   WinMove($ihWnd, "", 0, 0, DllStructGetData($aData[1], 3), DllStructGetData($aData[1], 4))
    If $showMsg Then ShowMsg("Showing")
 EndFunc
 
